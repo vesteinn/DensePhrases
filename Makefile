@@ -1,11 +1,21 @@
 ############################## Single-passage Training + Normalization ###################################
 
+
+pretr=/p/project/joaiml/snaebjarnarson1/XLM/chkpt_11_82k
+
 model-name:
 ifeq ($(MODEL_NAME),)
 	echo "Please set MODEL_NAME before training (e.g., MODEL_NAME=test)"; exit 2;
 endif
 
 # Dataset paths for single-passage training (QG, train, dev, semi-od)
+
+nq-single-data-is:
+        $(eval TRAIN_QG_DATA=nq/train_wiki3_na_filtered_qg_t5l35-sqd_filtered.is.test.json)
+        $(eval TRAIN_DATA=nq/train_wiki3.is.json)
+        $(eval DEV_DATA=nq/dev_wiki3.is.json)
+        $(eval SOD_DATA=open-qa/nq-open/dev_wiki3_open.is.json)
+        $(eval OPTIONS=--truecase)
 nq-single-data:
 	$(eval TRAIN_QG_DATA=nq/train_wiki3_na_filtered_qg_t5l35-sqd_filtered.json)
 	$(eval TRAIN_DATA=nq/train_wiki3.json)
@@ -31,9 +41,11 @@ nq-param:
 	$(eval BS=64)
 	$(eval LR=1e-4)
 	$(eval MAX_SEQ_LEN=192)
-	$(eval LAMBDA_KL=2.0)
+        # TODO FIX this by training biling extractive
+	$(eval LAMBDA_KL=0.0)
+        #$(eval LAMBDA_KL=2.0)
 	$(eval LAMBDA_NEG=4.0)
-	$(eval TEACHER_NAME=spanbert-base-cased-nq)
+       	$(eval TEACHER_NAME=spanbert-base-cased-nq)
 sqd-param:
 	$(eval BS=24)
 	$(eval LR=3e-5)
@@ -52,8 +64,8 @@ nqsqd-param:
 # Command with default setting. Use train-single-nq instead.
 train-single:
 	python -m densephrases.experiments.run_single \
-		--model_type bert \
-		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
+		--model_type xlm-roberta \
+		--pretrained_name_or_path ${pretr} \
 		--data_dir $(DPH_DATA_DIR)/single-qa \
 		--cache_dir $(DPH_CACHE_DIR) \
 		--train_file $(TRAIN_DATA) \
@@ -88,7 +100,7 @@ draft: model-name nq-single-data nq-param pbn-param
 	make eval-sod SOD_DATA=$(SOD_DATA) OPTIONS=$(OPTIONS)
 
 # Single-passage training + normalization for NQ (simply change 'nq' to 'sqd' for SQuAD)
-train-single-nq: model-name nq-single-data nq-param pbn-param
+train-single-nq: model-name nq-single-data-is nq-param pbn-param
 	make train-single \
 		TRAIN_DATA=$(TRAIN_QG_DATA) DEV_DATA=$(DEV_DATA) \
 		TEACHER_NAME=$(TEACHER_NAME) MODEL_NAME=$(MODEL_NAME)_tmp \
@@ -146,8 +158,8 @@ eval-sod-pq: model-name
 # Create phrase dump
 dump-sod: model-name nq-single-data
 	python -m densephrases.experiments.run_single \
-		--model_type bert \
-		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
+		--model_type xlm-roberta \
+		--pretrained_name_or_path ${pretr} \
 		--data_dir $(DPH_DATA_DIR)/single-qa \
 		--cache_dir $(DPH_CACHE_DIR) \
 		--predict_file $(DEV_DATA) \
@@ -164,8 +176,8 @@ dump-sod: model-name nq-single-data
 # Test filter thresholds
 filter-test: model-name nq-single-data
 	python -m densephrases.experiments.run_single \
-		--model_type bert \
-		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
+		--model_type xlm-roberta \
+		--pretrained_name_or_path ${pretr} \
 		--data_dir $(DPH_DATA_DIR)/single-qa \
 		--cache_dir $(DPH_CACHE_DIR) \
 		--predict_file $(DEV_DATA) \
@@ -193,8 +205,8 @@ endif
 # Please move the dump to an SSD $(DUMP_DIR) for a faster indexing.
 dump-large: model-name
 	nohup python -m densephrases.experiments.parallel.dump_phrases \
-		--model_type bert \
-		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
+		--model_type xlm-roberta \
+		--pretrained_name_or_path ${pretr} \
 		--cache_dir $(DPH_CACHE_DIR) \
 		--data_dir $(DPH_DATA_DIR)/wikidump \
 		--data_name dev_wiki \
@@ -307,8 +319,8 @@ benchmark-data:
 eval-od: dump-dir model-name nq-open-data
 	python -m densephrases.experiments.run_open \
 		--run_mode eval_inmemory \
-		--model_type bert \
-		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
+		--model_type xlm-roberta \
+		--pretrained_name_or_path ${pretr} \
 		--cuda \
 		--eval_batch_size 12 \
 		--dump_dir $(DUMP_DIR) \
@@ -320,8 +332,8 @@ eval-od: dump-dir model-name nq-open-data
 train-query: dump-dir model-name nq-open-data
 	python -m densephrases.experiments.run_open \
 		--run_mode train_query \
-		--model_type bert \
-		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
+		--model_type xlm-roberta \
+		--pretrained_name_or_path ${pretr} \
 		--cache_dir $(DPH_CACHE_DIR) \
 		--train_path $(DPH_DATA_DIR)/$(TRAIN_DATA) \
 		--dev_path $(DPH_DATA_DIR)/$(DEV_DATA) \
@@ -344,8 +356,8 @@ train-query: dump-dir model-name nq-open-data
 q-serve:
 	nohup python -m densephrases.demo.serve \
 		--run_mode q_serve \
-		--model_type bert \
-		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
+		--model_type xlm-roberta \
+		--pretrained_name_or_path ${pretr} \
 		--cache_dir $(DPH_CACHE_DIR) \
 		--query_encoder_path $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--cuda \
@@ -367,8 +379,8 @@ p-serve: dump-dir
 single-serve:
 	nohup python -m densephrases.demo.serve \
 		--run_mode single_serve \
-		--model_type bert \
-		--pretrained_name_or_path SpanBERT/spanbert-base-cased \
+		--model_type xlm-roberta \
+		--pretrained_name_or_path ${pretr} \
 		--cuda \
 		--cache_dir $(DPH_CACHE_DIR) \
 		--query_encoder_path $(DPH_SAVE_DIR)/$(MODEL_NAME) \
