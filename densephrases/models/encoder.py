@@ -89,10 +89,11 @@ class DensePhrases(PreTrainedModel):
 
     def embed_phrase(self, input_ids, attention_mask, token_type_ids):
         """ Get phrase embeddings (token-wise) """
+        #import pdb; pdb.set_trace()
         outputs_s = self.phrase_encoder(
             input_ids,
             attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
+            token_type_ids=torch.zeros_like(token_type_ids),
         )
         sequence_output_s = outputs_s[0]
         sequence_output_e = outputs_s[0]
@@ -105,12 +106,14 @@ class DensePhrases(PreTrainedModel):
         outputs_s_ = self.query_start_encoder(
             input_ids_,
             attention_mask=attention_mask_,
-            token_type_ids=token_type_ids_,
+            token_type_ids=token_type_ids_
+            #token_type_ids=torch.zeros_like(token_type_ids_)
         )
         outputs_e_ = self.query_end_encoder(
             input_ids_,
             attention_mask=attention_mask_,
-            token_type_ids=token_type_ids_,
+            token_type_ids=token_type_ids_
+            #token_type_ids=torch.zeros_like(token_type_ids_)
         )
         sequence_output_s_ = outputs_s_[0]
         sequence_output_e_ = outputs_e_[0]
@@ -125,7 +128,6 @@ class DensePhrases(PreTrainedModel):
         start_positions=None, end_positions=None,
         return_phrase=False, return_query=False,
     ):
-
         # Context-side
         if input_ids is not None:
             assert len(input_ids.size()) == 2
@@ -220,11 +222,12 @@ class DensePhrases(PreTrainedModel):
                     outputs_qd = self.cross_encoder(
                         new_input_ids,
                         attention_mask=new_attention_mask,
-                        token_type_ids=new_token_type_ids,
+                        token_type_ids=torch.zeros_like(new_token_type_ids),
                     )
                     tmp_sequence_output = outputs_qd[0]
                     sequence_output = []
                     for seq_output, att_mask_ in zip(tmp_sequence_output, attention_mask_):
+                        #import pdb; pdb.set_trace()
                         sequence_output.append(
                             torch.cat((seq_output[:1], seq_output[att_mask_.sum():att_mask_.sum()+input_ids.shape[1]-1]))
                         )

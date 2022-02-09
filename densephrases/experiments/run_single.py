@@ -37,6 +37,7 @@ from transformers import (
     AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
+from transformers import XLMRobertaModel
 import densephrases.utils.squad_utils as squad_utils
 from densephrases.utils.single_utils import set_seed, to_list, to_numpy, backward_compat
 from densephrases.utils.squad_metrics import compute_predictions_log_probs, compute_predictions_logits, squad_evaluate
@@ -180,7 +181,8 @@ def train(args, train_dataset, model, tokenizer):
 
             model.train()
             batch = tuple(t.to(args.device) for t in batch)
-
+            #batch = tuple(t.to("cpu") for t in batch)
+            
             inputs = {
                 "input_ids": batch[0],
                 "attention_mask": batch[1],
@@ -192,6 +194,8 @@ def train(args, train_dataset, model, tokenizer):
                 "token_type_ids_": batch[10],
             }
 
+            #import pdb; pdb.set_trace()
+            #model.to("cpu")
             outputs = model(**inputs)
             # model outputs are always tuple in transformers (see doc)
             loss = outputs[0]
@@ -932,21 +936,23 @@ def main():
             cross_encoder = torch.load(
                 os.path.join(args.teacher_dir, "pytorch_model.bin"), map_location=torch.device('cpu')
             )
-            new_qd = {n[len('bert')+1:]: p for n, p in cross_encoder.items() if 'bert' in n}
+            #new_qd = {n[len('bert')+1:]: p for n, p in cross_encoder.items() if 'bert' in n}
             new_linear = {n[len('qa_outputs')+1:]: p for n, p in cross_encoder.items() if 'qa_outputs' in n}
-            qd_config, unused_kwargs = AutoConfig.from_pretrained(
-                args.pretrained_name_or_path,
-                cache_dir=args.cache_dir if args.cache_dir else None,
-                return_unused_kwargs=True
-            )
-            qd_pretrained = AutoModel.from_pretrained(
-                args.pretrained_name_or_path,
-                from_tf=bool(".ckpt" in args.pretrained_name_or_path),
-                config=qd_config,
-                cache_dir=args.cache_dir if args.cache_dir else None,
+            #qd_config, unused_kwargs = AutoConfig.from_pretrained(
+            #    args.pretrained_name_or_path,
+            #    cache_dir=args.cache_dir if args.cache_dir else None,
+            #    return_unused_kwargs=True
+            #)
+            
+            qd_pretrained = XLMRobertaModel.from_pretrained(
+                args.teacher_dir
+		#args.pretrained_name_or_path,
+                #from_tf=bool(".ckpt" in args.pretrained_name_or_path),
+                #config=qd_config,
+                #cache_dir=args.cache_dir if args.cache_dir else None,
             )
             model.cross_encoder = qd_pretrained
-            model.cross_encoder.load_state_dict(new_qd)
+            #model.cross_encoder.load_state_dict(new_qd)
             model.qa_outputs = torch.nn.Linear(config.hidden_size, 2)
             model.qa_outputs.load_state_dict(new_linear)
             logger.info(f'Distill with teacher model {args.teacher_dir}')

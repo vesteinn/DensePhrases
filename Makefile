@@ -1,7 +1,7 @@
 ############################## Single-passage Training + Normalization ###################################
 
 
-pretr=/p/project/joaiml/snaebjarnarson1/XLM/chkpt_11_82k
+pretr=/p/project/joaiml/snaebjarnarson1/XLM/chkpt_27_204k
 
 model-name:
 ifeq ($(MODEL_NAME),)
@@ -11,11 +11,10 @@ endif
 # Dataset paths for single-passage training (QG, train, dev, semi-od)
 
 nq-single-data-is:
-        $(eval TRAIN_QG_DATA=nq/train_wiki3_na_filtered_qg_t5l35-sqd_filtered.is.test.json)
-        $(eval TRAIN_DATA=nq/train_wiki3.is.json)
-        $(eval DEV_DATA=nq/dev_wiki3.is.json)
-        $(eval SOD_DATA=open-qa/nq-open/dev_wiki3_open.is.json)
-        $(eval OPTIONS=--truecase)
+	$(eval TRAIN_QG_DATA=nq/train_wiki3_na_filtered_qg_t5l35-sqd_filtered.is.test.json)
+	$(eval TRAIN_DATA=nq/train_wiki3.is.json)
+	$(eval DEV_DATA=nq/dev_wiki3.is.json)
+	$(eval SOD_DATA=open-qa/nq-open/dev_wiki3_open.is.debug200.json)
 nq-single-data:
 	$(eval TRAIN_QG_DATA=nq/train_wiki3_na_filtered_qg_t5l35-sqd_filtered.json)
 	$(eval TRAIN_DATA=nq/train_wiki3.json)
@@ -31,21 +30,37 @@ nqsqd-single-data:
 	$(eval TRAIN_QG_DATA=squad-nq/train-sqdqg_nqqg_filtered.json)
 	$(eval TRAIN_DATA=squad-nq/train-sqd_nq.json)
 	$(eval DEV_DATA=nq/dev_wiki3.json)
-	$(eval SOD_DATA=open-qa/nq-open/dev_wiki3_open.json)
+	$(eval SOD_DATA=open-qa/nq-open/dev_wiki3_open.debug200.json)
 	$(eval OPTIONS=--truecase)
+nqsqd-single-data-is:
+	$(eval TRAIN_QG_DATA=squad-nq/train-sqdqg_nqqg_filtered.is.json.tok.json)
+	$(eval TRAIN_DATA=squad-nq/train-sqd_nq.is.json.tok.json)
+	$(eval DEV_DATA=nq/dev_wiki3.is.json.tok.json)
+	$(eval SOD_DATA=open-qa/nq-open/dev_wiki3_open.is.json.tok.json)
+	$(eval OPTIONS=--truecase)
+nqii-single-data-is:
+	$(eval TRAIN_DATA=nqii/tidy_train_squad_format_tok.json)
+	$(eval DEV_DATA=nqii/tidy_dev_squad_format_tok.json)
+	$(eval SOD_DATA=single-qa/nqii/tidy_dev_sod_tok.json)
+
 	
 # Choose hyperparameter
 pbn-param:
 	$(eval PBN_OPTIONS=--pbn_size 2 --pbn_tolerance 0)
 nq-param:
-	$(eval BS=64)
+	$(eval BS=32)
 	$(eval LR=1e-4)
 	$(eval MAX_SEQ_LEN=192)
-        # TODO FIX this by training biling extractive
-	$(eval LAMBDA_KL=0.0)
-        #$(eval LAMBDA_KL=2.0)
+	$(eval LAMBDA_KL=2.0)
 	$(eval LAMBDA_NEG=4.0)
-       	$(eval TEACHER_NAME=spanbert-base-cased-nq)
+	$(eval TEACHER_NAME=nq-teacher-cl-enis)
+nq-param-is:
+	$(eval BS=32)
+	$(eval LR=1e-4)
+	$(eval MAX_SEQ_LEN=192)
+	$(eval LAMBDA_KL=4.0)
+	$(eval LAMBDA_NEG=4.0)
+	$(eval TEACHER_NAME=xlmr-all-is)
 sqd-param:
 	$(eval BS=24)
 	$(eval LR=3e-5)
@@ -54,12 +69,12 @@ sqd-param:
 	$(eval LAMBDA_NEG=2.0)
 	$(eval TEACHER_NAME=spanbert-base-cased-squad)
 nqsqd-param:
-	$(eval BS=64)
+	$(eval BS=32)
 	$(eval LR=1e-4)
 	$(eval MAX_SEQ_LEN=192)
 	$(eval LAMBDA_KL=4.0)
 	$(eval LAMBDA_NEG=4.0)
-	$(eval TEACHER_NAME=spanbert-base-cased-sqdnq)
+	$(eval TEACHER_NAME=squad-nq_tok)
 
 # Command with default setting. Use train-single-nq instead.
 train-single:
@@ -74,7 +89,7 @@ train-single:
 		--do_eval \
 		--per_gpu_train_batch_size $(BS) \
 		--learning_rate $(LR) \
-		--num_train_epochs 2.0 \
+		--num_train_epochs 1.0 \
 		--max_seq_length $(MAX_SEQ_LEN) \
 		--fp16 \
 		--lambda_kl $(LAMBDA_KL) \
@@ -89,7 +104,7 @@ train-single:
 		$(OPTIONS)
 
 # Sample usage (If this runs without an error, you are all set!)
-draft: model-name nq-single-data nq-param pbn-param
+draft: model-name nq-single-data-is nq-param pbn-param
 	make train-single \
 		TRAIN_DATA=$(TRAIN_DATA) DEV_DATA=$(DEV_DATA) \
 		TEACHER_NAME=$(TEACHER_NAME) MODEL_NAME=$(MODEL_NAME) \
@@ -100,12 +115,36 @@ draft: model-name nq-single-data nq-param pbn-param
 	make eval-sod SOD_DATA=$(SOD_DATA) OPTIONS=$(OPTIONS)
 
 # Single-passage training + normalization for NQ (simply change 'nq' to 'sqd' for SQuAD)
-train-single-nq: model-name nq-single-data-is nq-param pbn-param
+train-single-nq: model-name nqsqd-single-data-is nqsqd-param pbn-param
 	make train-single \
 		TRAIN_DATA=$(TRAIN_QG_DATA) DEV_DATA=$(DEV_DATA) \
-		TEACHER_NAME=$(TEACHER_NAME) MODEL_NAME=$(MODEL_NAME)_tmp \
+		TEACHER_NAME=$(TEACHER_NAME) MODEL_NAME=$(MODEL_NAME)_tmp_1 \
 		BS=$(BS) LR=$(LR) MAX_SEQ_LEN=$(MAX_SEQ_LEN) \
 		LAMBDA_KL=$(LAMBDA_KL) LAMBDA_NEG=$(LAMBDA_NEG)
+	cp -r /scratch/outputs ../outputs_tok_xlmr_nqsq_1
+	make train-single \
+		TRAIN_DATA=$(TRAIN_QG_DATA) DEV_DATA=$(DEV_DATA) \
+		TEACHER_NAME=$(TEACHER_NAME) MODEL_NAME=$(MODEL_NAME)_tmp_2 \
+		BS=$(BS) LR=$(LR) MAX_SEQ_LEN=$(MAX_SEQ_LEN) \
+		LAMBDA_KL=$(LAMBDA_KL) LAMBDA_NEG=$(LAMBDA_NEG) \
+		OPTIONS='--load_dir $(DPH_SAVE_DIR)/$(MODEL_NAME)_tmp'
+	cp -r /scratch/outputs ../outputs_tok_xlmr_nqsq_2
+	make train-single \
+		TRAIN_DATA=$(TRAIN_DATA) DEV_DATA=$(DEV_DATA) \
+		TEACHER_NAME=$(TEACHER_NAME) MODEL_NAME=$(MODEL_NAME) \
+		BS=$(BS) LR=$(LR) MAX_SEQ_LEN=$(MAX_SEQ_LEN) \
+		LAMBDA_KL=$(LAMBDA_KL) LAMBDA_NEG=$(LAMBDA_NEG) \
+		OPTIONS='$(PBN_OPTIONS) --do_dump --load_dir $(DPH_SAVE_DIR)/$(MODEL_NAME)_tmp_2'
+	cp -r /scratch/outputs ../outputs_tok_xlmr_nqsq_3
+	#make index-sod
+	#cp -r /scratch/outputs ./debug/
+	#make eval-sod SOD_DATA=$(SOD_DATA) OPTIONS=$(OPTIONS)
+train-single-nq-is: model-name nq-single-data-is nq-param pbn-param
+	#make train-single \
+	#	TRAIN_DATA=$(TRAIN_QG_DATA) DEV_DATA=$(DEV_DATA) \
+	#	TEACHER_NAME=$(TEACHER_NAME) MODEL_NAME=$(MODEL_NAME)_tmp \
+	#	BS=$(BS) LR=$(LR) MAX_SEQ_LEN=$(MAX_SEQ_LEN) \
+	#	LAMBDA_KL=$(LAMBDA_KL) LAMBDA_NEG=$(LAMBDA_NEG)
 	make train-single \
 		TRAIN_DATA=$(TRAIN_DATA) DEV_DATA=$(DEV_DATA) \
 		TEACHER_NAME=$(TEACHER_NAME) MODEL_NAME=$(MODEL_NAME) \
@@ -114,6 +153,16 @@ train-single-nq: model-name nq-single-data-is nq-param pbn-param
 		OPTIONS='$(PBN_OPTIONS) --do_dump --load_dir $(DPH_SAVE_DIR)/$(MODEL_NAME)_tmp'
 	make index-sod
 	make eval-sod SOD_DATA=$(SOD_DATA) OPTIONS=$(OPTIONS)
+train-single-nqii: model-name nqii-single-data-is nq-param-is pbn-param
+	make train-single \
+                TRAIN_DATA=$(TRAIN_DATA) DEV_DATA=$(DEV_DATA) \
+                TEACHER_NAME=$(TEACHER_NAME) MODEL_NAME=$(MODEL_NAME) \
+                BS=$(BS) LR=$(LR) MAX_SEQ_LEN=$(MAX_SEQ_LEN) \
+                LAMBDA_KL=$(LAMBDA_KL) LAMBDA_NEG=$(LAMBDA_NEG) \
+                OPTIONS='$(PBN_OPTIONS) --do_dump --load_dir $(DPH_SAVE_DIR)/dph_xlmr_isen_trans_nqsqd_tok'
+	make index-sod
+	make eval-sod SOD_DATA=$(SOD_DATA)
+
 
 # Create IVFSQ index for Semi-OD
 index-sod: model-name
@@ -122,7 +171,7 @@ index-sod: model-name
 		--replace \
 		--num_clusters 256 \
 		--fine_quant SQ4 \
-		--cuda
+		--cuda \
 
 # Evaluate IVFSQ index for Semi-OD
 eval-sod: model-name
@@ -132,8 +181,9 @@ eval-sod: model-name
 		--dump_dir $(DPH_SAVE_DIR)/$(MODEL_NAME)/dump \
 		--index_dir start/256_flat_SQ4 \
 		--query_encoder_path $(DPH_SAVE_DIR)/$(MODEL_NAME) \
-		--test_path $(DPH_DATA_DIR)/$(SOD_DATA) \
-		$(OPTIONS)
+	 	--test_path $(DPH_DATA_DIR)/$(SOD_DATA) \
+	        --pretrained_name_or_path ${pretr} \
+         	$(OPTIONS)
 
 # Create IVFPQ index for Semi-OD
 index-sod-pq: model-name
@@ -153,10 +203,11 @@ eval-sod-pq: model-name
 		--index_dir start/256_flat_PQ96_8 \
 		--query_encoder_path $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--test_path $(DPH_DATA_DIR)/$(SOD_DATA) \
+	        --pretrained_name_or_path ${pretr}\ 
 		$(OPTIONS)
 
 # Create phrase dump
-dump-sod: model-name nq-single-data
+dump-sod: model-name nq-single-data-is
 	python -m densephrases.experiments.run_single \
 		--model_type xlm-roberta \
 		--pretrained_name_or_path ${pretr} \
@@ -170,7 +221,7 @@ dump-sod: model-name nq-single-data
 		--filter_threshold -2.0 \
 		--append_title \
 		--load_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
-		--output_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
+		--output_dir $(DPH_SAVE_DIR)/$(MODEL_NAME)_only_dump \
 		--overwrite_cache
 
 # Test filter thresholds
@@ -204,32 +255,46 @@ endif
 # Dump phrase reps in parallel. Dump will be saved in $(DPH_SAVE_DIR)/$(MODEL_NAME)_(data_name)/dump.
 # Please move the dump to an SSD $(DUMP_DIR) for a faster indexing.
 dump-large: model-name
-	nohup python -m densephrases.experiments.parallel.dump_phrases \
+	python -m densephrases.experiments.parallel.dump_phrases \
 		--model_type xlm-roberta \
 		--pretrained_name_or_path ${pretr} \
 		--cache_dir $(DPH_CACHE_DIR) \
 		--data_dir $(DPH_DATA_DIR)/wikidump \
-		--data_name dev_wiki \
+		--data_name 20181220_concat_tok \
 		--load_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--output_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--filter_threshold 0.0 \
 		--append_title \
 		--start $(START) \
 		--end $(END) \
-		> $(DPH_SAVE_DIR)/logs/$(MODEL_NAME)_$(START)-$(END).log &
-
+		> ../logs/$(MODEL_NAME)_$(START)-$(END).log &
+dump-large-is: model-name
+	python -m densephrases.experiments.parallel.dump_phrases \
+                --model_type xlm-roberta \
+                --pretrained_name_or_path ${pretr} \
+                --cache_dir $(DPH_CACHE_DIR) \
+                --data_dir $(DPH_DATA_DIR)/wikidump \
+                --data_name wiki_dump_is_dph_tok \
+                --load_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
+                --output_dir $(DPH_SAVE_DIR)/$(MODEL_NAME) \
+                --filter_threshold 0.0 \
+                --append_title \
+                --start 1 \
+                --end 2 \
+                > ../logs/$(MODEL_NAME)_1-2.log &
 # IVFSQ indexing: for 131072 or 1048576, stop the process after training the quantizer and use index-add below
 index-large: dump-dir
 	python -m densephrases.experiments.create_index \
 		$(DUMP_DIR) all \
-		--replace \
 		--num_clusters 16384 \
 		--fine_quant SQ4 \
 		--cuda
 
+		#--replace \
 # Parallel add for large-scale on-disk IVFSQ (start, end = file idx)
 index-add: dump-dir
 	export MKL_SERVICE_FORCE_INTEL=1
+	#export MKL_THREADING_LAYER=GNU
 	python -m densephrases.experiments.parallel.add_to_index \
 		--dump_dir $(DUMP_DIR) \
 		--num_clusters 1048576 \
@@ -253,16 +318,23 @@ index-large-pq: dump-dir
 		--num_clusters 1048576 \
 		--fine_quant PQ96_8 \
 		--cuda
-
+index-large-pq-is: dump-dir
+	python -m densephrases.experiments.create_index \
+		$(DUMP_DIR) all \
+		--replace \
+		--num_clusters 16384 \
+		--fine_quant PQ96_8 \
+		--cuda
 # Use if for large-scale dump evaluation
 eval-dump: model-name dump-dir nq-single-data
 	python -m densephrases.experiments.run_open \
 		--run_mode eval_inmemory \
 		--cuda \
 		--dump_dir $(DUMP_DIR) \
-		--index_dir start/16384_flat_SQ4 \
+		--index_dir start/1048576_flat_SQ4 \
 		--query_encoder_path $(DPH_SAVE_DIR)/$(MODEL_NAME) \
 		--test_path $(DPH_DATA_DIR)/$(SOD_DATA) \
+                --pretrained_name_or_path ${pretr} \
 		$(OPTIONS)
 
 # Compressed metadata to load it on RAM (only use for PQ)
@@ -364,11 +436,12 @@ q-serve:
 		--max_query_length 32 \
 		--query_port $(Q_PORT) > $(DPH_SAVE_DIR)/logs/q-serve_$(Q_PORT).log &
 
-# Serve phrase index (Q_PORT may change)
+# Serve phrase index (Q_PORT may change
+#1048576_flat_PQ96_8 
 p-serve: dump-dir
 	nohup python -m densephrases.demo.serve \
 		--run_mode p_serve \
-		--index_dir start/1048576_flat_PQ96_8 \
+		--index_dir start/1048576_flat_SQ4 \
 		--cuda \
 		--truecase \
 		--dump_dir $(DUMP_DIR) \

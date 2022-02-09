@@ -206,10 +206,18 @@ def eval_inmemory(args, mips=None, query_encoder=None, tokenizer=None):
         evidences += evidence
         titles += title
         scores += score
-
     logger.info(f"Avg. {sum(mips.num_docs_list)/len(mips.num_docs_list):.2f} number of docs per query")
     eval_fn = evaluate_results if not args.is_kilt else evaluate_results_kilt
     return eval_fn(predictions, qids, questions, answers, args, evidences, scores, titles)
+
+
+# 
+# Hack to test lemmatisation compared with bm25+ib for icelandic
+#
+#import string
+#from lemmatizer import Lemmatizer
+#l = Lemmatizer()
+#for_lem = open("for_external_lemmatisation.txt", "w")
 
 
 def evaluate_results(predictions, qids, questions, answers, args, evidences, scores, titles, q_tokens=None):
@@ -238,6 +246,15 @@ def evaluate_results(predictions, qids, questions, answers, args, evidences, sco
     # Get em/f1
     f1s, ems = [], []
     for prediction, groundtruth in zip(top1_preds, answers):
+        # 
+        # Hack to test lemmatisation comparison with bm25+ib for icelandic
+        # 
+        #groundtruth = [" ".join(l.lemmatize(gt)[0][0]) for gt in groundtruth]
+        #prediction = " ".join(l.lemmatize(prediction)[0][0])
+        #prediction = "".join(ch for ch in " ".join(tokenize(prediction)) if ch not in punct).strip()
+        #groundtruth = ["".join(ch for ch in gt if ch not in punct).strip() for gt in groundtruth]
+	#for_lem.writelines(f"{prediction}/")
+
         if len(groundtruth)==0:
             f1s.append(0)
             ems.append(0)

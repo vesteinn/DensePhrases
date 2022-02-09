@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Modify below to your choice of directory
-export BASE_DIR=./
+export BASE_DIR=/p/project/joaiml/snaebjarnarson1/DensePhrases
 
 while read -p "Use to $BASE_DIR as the base directory (requires at least 220GB for the installation)? [yes/no]: " choice; do
     case "$choice" in
@@ -25,9 +25,9 @@ done
 # DPH_DATA_DIR: for datasets (including 'kilt', 'open-qa', 'single-qa', 'truecase', 'wikidump')
 # DPH_SAVE_DIR: for pre-trained models or dumps; new models and dumps will also be saved here
 # DPH_CACHE_DIR: for cache files from huggingface transformers
-export DPH_DATA_DIR=$BASE_DIR/dph-data
-export DPH_SAVE_DIR=$BASE_DIR/outputs
-export DPH_CACHE_DIR=$BASE_DIR/cache
+export DPH_DATA_DIR=/scratch/dph-data  #$BASE_DIR/dph-data
+export DPH_SAVE_DIR=/scratch/outputs #$BASE_DIR/outputs
+export DPH_CACHE_DIR=/scratch/cache #$BASE_DIR/cache
 
 echo "Environment variables set as follows:"
 echo "DPH_DATA_DIR=$DPH_DATA_DIR"
@@ -51,3 +51,4 @@ done
 
 # Log directory
 mkdir -p $DPH_SAVE_DIR/logs
+

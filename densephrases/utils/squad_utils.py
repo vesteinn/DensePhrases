@@ -180,7 +180,7 @@ def squad_convert_example_to_features(example, max_seq_length, doc_stride, max_q
             )
 
         sequence_added_tokens = ( # 2 for BERT
-            tokenizer.max_len - tokenizer.max_len_single_sentence # + 1 # TODO: Why +1 for roberta?
+            tokenizer.max_len - tokenizer.max_len_single_sentence + 1 # TODO: Why +1 for roberta?
             if "roberta" in str(type(tokenizer)) or "camembert" in str(type(tokenizer))
             else tokenizer.max_len - tokenizer.max_len_single_sentence
         )
@@ -767,6 +767,8 @@ class SquadProcessor(DataProcessor):
         ) as reader:
             input_data = json.load(reader)["data"]
 
+        # added
+        skip_no_answer=True
         return self._create_examples(
                 input_data, "train", draft, context_only=context_only, skip_no_answer=skip_no_answer, args=args)
 
@@ -803,7 +805,7 @@ class SquadProcessor(DataProcessor):
         total_cnt = 0
         no_neg_cnt = 0
         truecase = TrueCaser(os.path.join(os.environ['DPH_DATA_DIR'], args.truecase_path))
-
+        qid_fallback = 0
         for doc_idx, entry in tqdm(enumerate(input_data)):
             title = entry["title"]
             short_context = []
@@ -849,9 +851,10 @@ class SquadProcessor(DataProcessor):
 
                 # Pre-processing questions
                 for qa in paragraph["qas"]:
+                    qid_fallback += 1
                     if "id" not in qa:
-                        assert len(paragraph["qas"]) == 1
-                        qas_id = paragraph["id"]
+                        #assert len(paragraph["qas"]) == 1
+                        qas_id = f"fbid-{qid_fallback}"  #paragraph["id"]
                     else:
                         qas_id = qa["id"]
                     question_text = qa["question"].strip()
@@ -878,8 +881,17 @@ class SquadProcessor(DataProcessor):
                             start_position_character = answer["answer_start"]
                             if ' ' in answer_text:
                                 answer_text = answer_text.replace(' ', ' ')
-                            assert context_text[start_position_character:start_position_character+len(answer_text)] == \
-                                    answer_text
+                            try:
+                                assert context_text[start_position_character:start_position_character+len(answer_text)] == \
+                                     answer_text
+                            except:
+                                # foobar from inplace sed
+                                try:
+                                    answer_text = "start"
+                                    assert context_text[start_position_character:start_position_character+len(answer_text)] == \
+                                        answer_text
+                                except:
+                                    import pdb; pdb.set_trace()
                         else:
                             answers = qa["answers"]
                     else:

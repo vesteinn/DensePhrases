@@ -787,31 +787,34 @@ def compute_predictions_log_probs(
             # XLNet un-tokenizer
             # Let's keep it simple for now and see if we need all this later.
             #
-            # tok_start_to_orig_index = feature.tok_start_to_orig_index
-            # tok_end_to_orig_index = feature.tok_end_to_orig_index
-            # start_orig_pos = tok_start_to_orig_index[pred.start_index]
-            # end_orig_pos = tok_end_to_orig_index[pred.end_index]
-            # paragraph_text = example.paragraph_text
-            # final_text = paragraph_text[start_orig_pos: end_orig_pos + 1].strip()
+            if False:
+                tok_start_to_orig_index = feature.tok_start_to_orig_index
+                tok_end_to_orig_index = feature.tok_end_to_orig_index
+                start_orig_pos = tok_start_to_orig_index[pred.start_index]
+                end_orig_pos = tok_end_to_orig_index[pred.end_index]
+                paragraph_text = example.paragraph_text
+                final_text = paragraph_text[start_orig_pos: end_orig_pos + 1].strip()
 
             # Previously used Bert untokenizer
-            tok_tokens = feature.tokens[pred.start_index : (pred.end_index + 1)]
-            orig_doc_start = feature.token_to_orig_map[pred.start_index]
-            orig_doc_end = feature.token_to_orig_map[pred.end_index]
-            orig_tokens = example.doc_tokens[orig_doc_start : (orig_doc_end + 1)]
-            tok_text = tokenizer.convert_tokens_to_string(tok_tokens)
+            # TODO UNDO
+            if True:
+                tok_tokens = feature.tokens[pred.start_index : (pred.end_index + 1)]
+                orig_doc_start = feature.token_to_orig_map[pred.start_index]
+                orig_doc_end = feature.token_to_orig_map[pred.end_index] # what is this 
+                orig_tokens = example.doc_tokens[orig_doc_start : (orig_doc_end + 1)]
+                tok_text = tokenizer.convert_tokens_to_string(tok_tokens)
 
-            # Clean whitespace
-            tok_text = tok_text.strip()
-            tok_text = " ".join(tok_text.split())
-            orig_text = " ".join(orig_tokens)
+		# Clean whitespace
+                tok_text = tok_text.strip()
+                tok_text = " ".join(tok_text.split())
+                orig_text = " ".join(orig_tokens)
 
-            if hasattr(tokenizer, "do_lower_case"):
-                do_lower_case = tokenizer.do_lower_case
-            else:
-                do_lower_case = tokenizer.do_lowercase_and_remove_accent
+                if hasattr(tokenizer, "do_lower_case"):
+                    do_lower_case = tokenizer.do_lower_case
+                else:
+                    do_lower_case = tokenizer.do_lowercase_and_remove_accent
 
-            final_text = get_final_text(tok_text, orig_text, do_lower_case, verbose_logging)
+                final_text = get_final_text(tok_text, orig_text, do_lower_case, verbose_logging)
 
             if final_text in seen_predictions:
                 continue

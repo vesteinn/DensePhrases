@@ -42,27 +42,28 @@ def get_metadata(features, results, max_answer_length, do_lower_case, tokenizer,
 
     # Get rid of titles + save start only (as start and end are shared)
     toffs = [(f.input_ids.index(tokenizer.sep_token_id))*int(has_title) for f in features]
+    #print(f"toffs: \t{toffs}")
     start = np.concatenate(
-        [result.start_vecs[to+1:len(feature.tokens) - 1] for feature, result, to in zip(features, results, toffs)],
+        [result.start_vecs[to+2:len(feature.tokens) - 1] for feature, result, to in zip(features, results, toffs)],
         axis=0
     )
 
-    len_per_para = [len(f.input_ids[to+1:len(f.tokens)-1]) for to, f in zip(toffs, features)]
+    len_per_para = [len(f.input_ids[to+2:len(f.tokens)-1]) for to, f in zip(toffs, features)]
     curr_size = 0
 
     # Filter reps
     fs = np.concatenate(
-        [result.sft_logits[to+1:len(feature.tokens) - 1] for feature, result, to in zip(features, results, toffs)], axis=0
+        [result.sft_logits[to+2:len(feature.tokens) - 1] for feature, result, to in zip(features, results, toffs)], axis=0
     )
     fe = np.concatenate(
-        [result.eft_logits[to+1:len(feature.tokens) - 1] for feature, result, to in zip(features, results, toffs)], axis=0
+        [result.eft_logits[to+2:len(feature.tokens) - 1] for feature, result, to in zip(features, results, toffs)], axis=0
     )
 
     # Start2end map
     start2end = -1 * np.ones([np.shape(start)[0], max_answer_length], dtype=np.int32)
     idx = 0
     for feature, result, to in zip(features, results, toffs):
-        for i in range(to+1, len(feature.tokens) - 1):
+        for i in range(to+2, len(feature.tokens) - 1):
             for j in range(i, min(i + max_answer_length, len(feature.tokens) - 1)):
                 start2end[idx, j - i] = idx + j - i
             idx += 1
@@ -79,12 +80,24 @@ def get_metadata(features, results, max_answer_length, do_lower_case, tokenizer,
         example = id2example[feature.unique_id]
         if prev_example is not None and feature.span_idx == 0:
             full_text = full_text + ' '.join(prev_example.doc_tokens) + sep
+        #print("---")
+        #print(example)
+        #print(full_text)
+        # change to+1 to to+2 , perhaps robert specific?
 
-        for i in range(to+1, len(feature.tokens) - 1):
+        for i in range(to+2, len(feature.tokens) - 1):
+            #print(f"i:\t {i}")
+            #print("to+1:\t{}".format(to+1))
+            #print("feature.tokens length: ".format(len(feature.tokens)-1))
+            #print(f"tokens:\t {feature.tokens}")
+            #print("max_for_start\t{}".format(min(len(feature.tokens) - 2, i + 1)))
+            #print("min_for_end\t".format(max(to+2, i - 1))) # to+1 changed to to to+2
             _, start_pos, _ = get_final_text_(example, feature, i, min(len(feature.tokens) - 2, i + 1), do_lower_case,
-                                              tokenizer, verbose_logging)
-            _, _, end_pos = get_final_text_(example, feature, max(to+1, i - 1), i, do_lower_case,
+                                        tokenizer, verbose_logging)
+            _, _, end_pos = get_final_text_(example, feature, max(to+2, i - 1), i, do_lower_case, # to+1 changed to to+2
                                             tokenizer, verbose_logging)
+            
+            
             start_pos += len(full_text)
             end_pos += len(full_text)
             word2char_start[word_pos] = start_pos
@@ -238,7 +251,7 @@ def write_phrases(all_examples, all_features, all_results, max_answer_length, do
     results = []
     inqueue = Queue(maxsize=50)
     outqueue = Queue(maxsize=50)
-    NUM_THREAD = 10
+    NUM_THREAD = 1 #0
     in_p_list = [Process(target=add, args=(inqueue, outqueue)) for _ in range(NUM_THREAD)]
     out_p_list = [Thread(target=write, args=(outqueue,)) for _ in range(NUM_THREAD)]
     global id2example
@@ -247,19 +260,23 @@ def write_phrases(all_examples, all_features, all_results, max_answer_length, do
         in_p.start()
     for out_p in out_p_list:
         out_p.start()
-
+    
+    #in_p_list = [add(inqueue, outqueue)]
+    #out_p_lost =  [write(outqueue)]
+     
     start_time = time()
     for count, result in enumerate(tqdm(all_results, total=len(all_features))):
         example = id2example[result.unique_id]
         feature = id2feature[result.unique_id]
         condition = len(features) > 0 and example.par_idx == 0 and feature.span_idx == 0
+        #import pdb; pdb.set_trace()
 
         if condition:
             # print('put')
             # in_ = (id2example_, features, results)
             in_ = (features, results)
             inqueue.put(in_)
-            # import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
             prev_ex = id2example[results[0].unique_id]
             if prev_ex.doc_idx % 200 == 0:
                 logger.info(f'saving {len(features)} features from doc {prev_ex.title} (doc_idx: {prev_ex.doc_idx})')
@@ -267,6 +284,8 @@ def write_phrases(all_examples, all_features, all_results, max_answer_length, do
                     '[%d/%d at %.1f second] ' % (count + 1, len(all_features), time() - start_time) +
                     '[inqueue, outqueue size: %d vs %d]' % (inqueue.qsize(), outqueue.qsize())
                 )
+            
+            #import pdb; pdb.set_trace()
             features = [feature]
             results = [result]
         else:
